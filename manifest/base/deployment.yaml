@@ -6,7 +6,7 @@ metadata:
     app: sampleapl-demo
     app.openshift.io/runtime: catalog
 spec:
-  replicas: 1
+  replicas: 2
   selector:
     matchLabels:
       app: sampleapl-demo
