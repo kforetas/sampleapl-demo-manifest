@@ -1,0 +1,24 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sampleapl-demo
+  labels:
+    app: sampleapl-demo
+    app.openshift.io/runtime: catalog
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sampleapl-demo
+  template:
+    metadata:
+      labels:
+        app: sampleapl-demo
+    spec:
+      containers:
+        - name: sampleapl-demo
+          image: quay.io/rhn_consulting_kemori/sampleapl-demo:latest
+          imagePullPolicy: "IfNotPresent"
+          ports:
+            - containerPort: 8088
+              protocol: TCP

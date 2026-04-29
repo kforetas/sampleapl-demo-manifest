@@ -1,0 +1,43 @@
+apiVersion: tekton.dev/v1beta1
+kind: Pipeline
+metadata:
+  name: python-app-pipeline
+spec:
+  workspaces:
+    - name: shared-data # コード共有用ストレージ
+  params:
+    - name: repo-url
+      type: string
+      description: GitリポジトリのURL
+    - name: image-name
+      type: string
+      description: 作成するイメージ名
+  tasks:
+    # 1. Git Clone
+    - name: fetch-repository
+      taskRef:
+        name: git-clone
+        kind: ClusterTask
+      workspaces:
+        - name: output
+          workspace: shared-data
+      params:
+        - name: url
+          value: $(params:repo-url)
+        - name: revision
+          value: "main"
+
+    # 2. ビルド & Push (Buildah)
+    # ※リポジトリ直下に Dockerfile がある前提
+    - name: build-and-push
+      runAfter:
+        - fetch-repository
+      taskRef:
+        name: buildah
+        kind: ClusterTask
+      workspaces:
+        - name: source
+          workspace: shared-data
+      params:
+        - name: IMAGE
+          value: $(params:image-name)

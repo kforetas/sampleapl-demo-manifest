@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: sampleapl-demo
+  labels:
+    app: sampleapl-demo
+spec:
+  type: ClusterIP
+  ports:
+    - name: 8088-tcp
+      protocol: TCP
+      port: 8088
+      targetPort: 8088
+  sessionAffinity: None
+  selector:
+    app: sampleapl-demo

@@ -1,0 +1,17 @@
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: sampleapl-demo
+  labels:
+    app: sampleapl-demo
+spec:
+  to:
+    kind: Service
+    name: sampleapl-demo
+    weight: 100
+  port:
+    targetPort: 8088-tcp
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+  wildcardPolicy: None
