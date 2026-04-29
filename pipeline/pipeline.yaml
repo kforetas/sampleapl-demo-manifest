@@ -1,43 +1,199 @@
 apiVersion: tekton.dev/v1beta1
 kind: Pipeline
 metadata:
-  name: python-app-pipeline
+  name: sampleapl-demo-pipeline
 spec:
-  workspaces:
-    - name: shared-data # コード共有用ストレージ
   params:
-    - name: repo-url
+    - default: 'https://github.com/kforetas/sampleapl-demo.git'
+      description: アプリのソースコードリポジトリ
+      name: repo-url
       type: string
-      description: GitリポジトリのURL
-    - name: image-name
+    - default: rhnconsultingkemori
+      description: docker hub username
+      name: docker-username
       type: string
-      description: 作成するイメージ名
+    - default: 'https://github.com/kforetas/sampleapl-demo-manifest.git'
+      description: マニフェスト管理用リポジトリ
+      name: manifest-repo-url
+      type: string
+    - default: latest
+      description: ビルドするイメージのタグ
+      name: image-tag
+      type: string
   tasks:
-    # 1. Git Clone
-    - name: fetch-repository
+    - name: git-clone-source
+      params:
+        - name: CRT_FILENAME
+          value: ca-bundle.crt
+        - name: HTTP_PROXY
+          value: ''
+        - name: HTTPS_PROXY
+          value: ''
+        - name: NO_PROXY
+          value: ''
+        - name: SUBDIRECTORY
+          value: source
+        - name: USER_HOME
+          value: /home/git
+        - name: DELETE_EXISTING
+          value: 'true'
+        - name: VERBOSE
+          value: 'false'
+        - name: SSL_VERIFY
+          value: 'true'
+        - name: URL
+          value: $(params.repo-url)
+        - name: REVISION
+          value: main
+        - name: REFSPEC
+          value: ''
+        - name: SUBMODULES
+          value: 'true'
+        - name: DEPTH
+          value: '1'
+        - name: SPARSE_CHECKOUT_DIRECTORIES
+          value: ''
       taskRef:
-        name: git-clone
-        kind: ClusterTask
+        params:
+          - name: kind
+            value: task
+          - name: name
+            value: git-clone
+          - name: namespace
+            value: openshift-pipelines
+        resolver: cluster
       workspaces:
         - name: output
           workspace: shared-data
+    - name: buildah
       params:
-        - name: url
-          value: $(params:repo-url)
-        - name: revision
-          value: "main"
-
-    # 2. ビルド & Push (Buildah)
-    # ※リポジトリ直下に Dockerfile がある前提
-    - name: build-and-push
+        - name: IMAGE
+          value: 'docker.io/$(params.docker-username)/sampleapl-demo:$(params.image-tag)'
+        - name: DOCKERFILE
+          value: ./Dockerfile
+        - name: BUILD_ARGS
+          value:
+            - ''
+        - name: CONTEXT
+          value: source
+        - name: STORAGE_DRIVER
+          value: vfs
+        - name: FORMAT
+          value: oci
+        - name: BUILD_EXTRA_ARGS
+          value: ''
+        - name: PUSH_EXTRA_ARGS
+          value: ''
+        - name: SKIP_PUSH
+          value: 'false'
+        - name: TLS_VERIFY
+          value: 'true'
+        - name: VERBOSE
+          value: 'false'
       runAfter:
-        - fetch-repository
+        - git-clone-source
       taskRef:
-        name: buildah
-        kind: ClusterTask
+        params:
+          - name: kind
+            value: task
+          - name: name
+            value: buildah
+          - name: namespace
+            value: openshift-pipelines
+        resolver: cluster
       workspaces:
         - name: source
           workspace: shared-data
+    - name: git-clone-manifest
       params:
-        - name: IMAGE
-          value: $(params:image-name)
+        - name: CRT_FILENAME
+          value: ca-bundle.crt
+        - name: HTTP_PROXY
+          value: ''
+        - name: HTTPS_PROXY
+          value: ''
+        - name: NO_PROXY
+          value: ''
+        - name: SUBDIRECTORY
+          value: manifest
+        - name: USER_HOME
+          value: /home/git
+        - name: DELETE_EXISTING
+          value: 'false'
+        - name: VERBOSE
+          value: 'false'
+        - name: SSL_VERIFY
+          value: 'true'
+        - name: URL
+          value: $(params.manifest-repo-url)
+        - name: REVISION
+          value: main
+        - name: REFSPEC
+          value: ''
+        - name: SUBMODULES
+          value: 'true'
+        - name: DEPTH
+          value: '1'
+        - name: SPARSE_CHECKOUT_DIRECTORIES
+          value: ''
+      taskRef:
+        params:
+          - name: kind
+            value: task
+          - name: name
+            value: git-clone
+          - name: namespace
+            value: openshift-pipelines
+        resolver: cluster
+      workspaces:
+        - name: output
+          workspace: shared-data
+    - name: update-gitops
+      params:
+        - name: CRT_FILENAME
+          value: ca-bundle.crt
+        - name: HTTP_PROXY
+          value: ''
+        - name: HTTPS_PROXY
+          value: ''
+        - name: NO_PROXY
+          value: ''
+        - name: SUBDIRECTORY
+          value: ''
+        - name: USER_HOME
+          value: /home/git
+        - name: DELETE_EXISTING
+          value: 'false'
+        - name: VERBOSE
+          value: 'false'
+        - name: SSL_VERIFY
+          value: 'true'
+        - name: GIT_USER_NAME
+          value: kforetas
+        - name: GIT_USER_EMAIL
+          value: kforetxp@yahoo.co.jp
+        - name: GIT_SCRIPT
+          value: |-
+            cd $(workspaces.source.path)/manifest
+            # YAMLのイメージタグを置換
+            sed -i "s|image: .*|image: docker.io/$(params.docker-username)/sampleapl-demo:$(params.image-tag)|g" manifest/base/deployment.yaml
+            git add . 
+            git commit -m "Update image to $(params.image-tag)" 
+            git push origin HEAD:main
+      runAfter:
+        - buildah
+        - git-clone-manifest
+      taskRef:
+        params:
+          - name: kind
+            value: task
+          - name: name
+            value: git-cli
+          - name: namespace
+            value: openshift-pipelines
+        resolver: cluster
+      workspaces:
+        - name: source
+          workspace: shared-data
+  workspaces:
+    - name: shared-data
