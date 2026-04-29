@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: sampleapl-demo
-          image: docker.io/rhnconsultingkemori/sampleapl-demo:v1.0.0
+          image: docker.io/rhnconsultingkemori/sampleapl-demo:latest
           imagePullPolicy: "IfNotPresent"
           ports:
             - containerPort: 8088
