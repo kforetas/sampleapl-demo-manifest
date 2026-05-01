@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: el-sampleapl-listener
+spec:
+  ports:
+    - name: http-listener
+      port: 8080
+      protocol: TCP
+      targetPort: 8080
+  selector:
+    eventlistener: sampleapl-listener
+  type: ClusterIP

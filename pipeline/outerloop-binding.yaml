@@ -1,0 +1,10 @@
+apiVersion: triggers.tekton.dev/v1beta1
+kind: TriggerBinding
+metadata:
+  name: outerloop-binding
+spec:
+  params:
+    - name: git-url
+      value: $(body.repository.clone_url)
+    - name: raw-tag
+      value: $(body.ref)

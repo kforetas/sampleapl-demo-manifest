@@ -1,0 +1,28 @@
+apiVersion: triggers.tekton.dev/v1beta1
+kind: TriggerTemplate
+metadata:
+  name: outerloop-template
+spec:
+  params:
+    - name: git-url
+    - name: raw-tag
+  resourcetemplates:
+    - apiVersion: tekton.dev/v1
+      kind: PipelineRun
+      metadata:
+        generateName: outerloop-run-
+      spec:
+        params:
+          - name: repo-url
+            value: $(tt.params.git-url)
+          - name: image-tag
+            value: $(tt.params.raw-tag)
+          - name: target-env
+            value: itst/itst-1
+        pipelineRef:
+          name: sampleapl-demo-pipeline
+        serviceAccountName: pipeline
+        workspaces:
+          - name: shared-data
+            persistentVolumeClaim:
+              claimName: tekton-workspace-pvc

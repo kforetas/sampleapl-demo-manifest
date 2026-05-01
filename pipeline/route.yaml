@@ -1,0 +1,14 @@
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: el-sampleapl-listener
+  labels:
+    eventlistener: sampleapl-listener
+spec:
+  to:
+    kind: Service
+    name: el-sampleapl-listener
+    weight: 100
+  port:
+    targetPort: http-listener
+  wildcardPolicy: None

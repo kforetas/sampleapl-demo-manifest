@@ -1,4 +1,4 @@
-apiVersion: tekton.dev/v1beta1
+apiVersion: tekton.dev/v1
 kind: Pipeline
 metadata:
   name: sampleapl-demo-pipeline
@@ -20,7 +20,34 @@ spec:
       description: ビルドするイメージのタグ
       name: image-tag
       type: string
+    - default: dev
+      description: 環境
+      name: target-env
+      type: string
   tasks:
+    - name: prepare-tag
+      params:
+        - name: raw-tag
+          value: $(params.image-tag)
+      taskSpec:
+        metadata: {}
+        params:
+          - name: raw-tag
+            type: string
+        results:
+          - name: clean-tag
+            type: string
+        spec: null
+        steps:
+          - computeResources: {}
+            image: alpine
+            name: sanitize
+            script: |
+              # refs/tags/ を取り除いて result に書き出す
+
+              CLEAN=$(echo "$(params.raw-tag)" | sed 's|refs/tags/||' | sed 's|refs/heads/||')
+
+              echo -n "${CLEAN}" > $(results.clean-tag.path)
     - name: git-clone-source
       params:
         - name: CRT_FILENAME
@@ -68,7 +95,7 @@ spec:
     - name: buildah
       params:
         - name: IMAGE
-          value: 'docker.io/$(params.docker-username)/sampleapl-demo:$(params.image-tag)'
+          value: 'docker.io/$(params.docker-username)/sampleapl-demo:$(tasks.prepare-tag.results.clean-tag)'
         - name: DOCKERFILE
           value: ./Dockerfile
         - name: BUILD_ARGS
@@ -91,6 +118,7 @@ spec:
         - name: VERBOSE
           value: 'false'
       runAfter:
+        - prepare-tag
         - git-clone-source
       taskRef:
         params:
@@ -174,11 +202,16 @@ spec:
           value: kforetxp@yahoo.co.jp
         - name: GIT_SCRIPT
           value: |-
-            cd $(workspaces.source.path)/manifest
-            # YAMLのイメージタグを置換
-            sed -i "s|image: .*|image: docker.io/$(params.docker-username)/sampleapl-demo:$(params.image-tag)|g" manifest/base/deployment.yaml
+            # 1. 開発環境（dev）のディレクトリへ移動 
+            cd $(workspaces.source.path)/manifest/manifest
+            # パラメータ target-env が "prod" なら overlays/prod を、そうでなければ dev を更新
+            TARGET_DIR="overlays/$(params.target-env)"
+            cd $TARGET_DIR
+            # 2. kustomization.yaml 内の newTag の行だけを置換 
+            sed -i "s|newTag:.*|newTag: $(tasks.prepare-tag.results.clean-tag)|g" kustomization.yaml
+            # 3. Git Push 
             git add . 
-            git commit -m "Update image to $(params.image-tag)" 
+            git commit -m "Update $(params.target-env) image to $(tasks.prepare-tag.results.clean-tag)" 
             git push origin HEAD:main
       runAfter:
         - buildah
