@@ -92,6 +92,15 @@ spec:
       workspaces:
         - name: output
           workspace: shared-data
+    - name: run-python-test
+      runAfter:
+        - git-clone-source
+      taskRef:
+        kind: Task
+        name: python-test
+      workspaces:
+        - name: source
+          workspace: shared-data
     - name: buildah
       params:
         - name: IMAGE
@@ -119,7 +128,7 @@ spec:
           value: 'false'
       runAfter:
         - prepare-tag
-        - git-clone-source
+        - run-python-test
       taskRef:
         params:
           - name: kind

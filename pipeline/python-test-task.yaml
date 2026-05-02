@@ -1,0 +1,21 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: python-test
+spec:
+  steps:
+    - computeResources: {}
+      image: 'python:3.9-slim'
+      name: run-test
+      script: |
+        #!/usr/bin/env bash
+        # 1. 必要なライブラリのインストール
+
+        pip install -r requirements.txt
+
+        # 2. 単体テストの実行
+        echo "Starting Unit Tests..."
+        python3 test_app.py
+      workingDir: $(workspaces.source.path)/source
+  workspaces:
+    - name: source
