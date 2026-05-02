@@ -1,8 +1,8 @@
 resources:
-  - ../../../base
+  - ../../base
 
-# Test sync - version_tag
+# Tag sync - version_tag
 images:
   - name: docker.io/rhnconsultingkemori/sampleapl-demo
     newName: docker.io/rhnconsultingkemori/sampleapl-demo
-    newTag: v1.1.0
+    newTag: v1.2.0

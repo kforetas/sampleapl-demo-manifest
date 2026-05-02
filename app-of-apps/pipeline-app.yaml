@@ -1,0 +1,18 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: pipeline-app
+  namespace: openshift-gitops
+spec:
+  project: default
+  source:
+    repoURL: 'https://github.com/kforetas/sampleapl-demo-manifest'
+    targetRevision: HEAD
+    path: pipeline
+  destination:
+    server: 'https://kubernetes.default.svc'
+    namespace: tekton-demo
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

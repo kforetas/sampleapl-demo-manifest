@@ -1,0 +1,20 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: deploy-sampleapl-demo-itst-3
+  namespace: openshift-gitops
+spec:
+  project: default
+  source:
+    repoURL: 'https://github.com/kforetas/sampleapl-demo-manifest'
+    targetRevision: HEAD
+    path: manifest/overlays/itst-3
+  destination:
+    server: 'https://kubernetes.default.svc'
+    namespace: demo-itst-3
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

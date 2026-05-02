@@ -1,0 +1,20 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: deploy-sampleapl-demo-prod
+  namespace: openshift-gitops
+spec:
+  project: default
+  source:
+    repoURL: 'https://github.com/kforetas/sampleapl-demo-manifest'
+    targetRevision: HEAD
+    path: manifest/overlays/prod
+  destination:
+    server: 'https://kubernetes.default.svc'
+    namespace: demo-prod
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
