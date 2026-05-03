@@ -18,7 +18,7 @@ spec:
           - name: image-tag
             value: $(tt.params.raw-tag)
           - name: target-env
-            value: itst/itst-1
+            value: itst-1
         pipelineRef:
           name: sampleapl-demo-pipeline
         serviceAccountName: pipeline
