@@ -30,3 +30,4 @@ spec:
         git add .
         git commit -m "chore: update $(params.target-env) image to $(params.new-tag)"
         git push origin HEAD:main
+

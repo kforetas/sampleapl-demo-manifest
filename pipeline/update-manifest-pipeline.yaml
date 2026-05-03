@@ -42,14 +42,32 @@ spec:
 
     - name: update-yaml
       taskRef:
-        name: update-manifest
+        params:
+          - name: kind
+            value: task
+          - name: name
+            value: git-cli
+          - name: namespace
+            value: openshift-pipelines
+        resolver: cluster
       runAfter:
         - git-clone-manifest
+      params:
+        - name: DELETE_EXISTING
+          value: 'false'
+        - name: GIT_USER_NAME
+          value: kforetas
+        - name: GIT_USER_EMAIL
+          value: kforetxp@yahoo.co.jp
+        - name: GIT_SCRIPT
+          value: |-
+            cd $(workspaces.source.path)/manifest/manifest
+            TARGET_DIR="overlays/$(params.target-env)"
+            cd $TARGET_DIR
+            sed -i "s|newTag:.*|newTag: $(params.new-tag)|g" kustomization.yaml
+            git add . 
+            git commit -m "Update $(params.target-env) image to $(params.new-tag)" 
+            git push origin HEAD:main
       workspaces:
         - name: source
           workspace: shared-data
-      params:
-        - name: target-env
-          value: $(params.target-env)
-        - name: new-tag
-          value: $(params.new-tag)
