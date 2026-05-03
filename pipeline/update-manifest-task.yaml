@@ -13,7 +13,7 @@ spec:
     - name: source
   steps:
     - name: kustomize-edit
-      image: line/kubectl-kustomize:latest
+      image: alpine/kustomize:latest
       workingDir: $(workspaces.source.path)
       script: |
         # 1. ターゲットディレクトリへ移動
