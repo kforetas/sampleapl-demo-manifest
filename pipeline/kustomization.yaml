@@ -9,3 +9,5 @@ resources:
   - sampleapl-listener.yaml
   - service.yaml
   - route.yaml
+  - update-manifest-task.yaml
+  - update-manifest-pipeline.yaml
