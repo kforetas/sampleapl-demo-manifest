@@ -7,51 +7,17 @@ spec:
   params:
     - name: target-env
       default: prod
-      description: リリース環境
       type: string
     - name: new-tag
       default: v1.2.2
-      description: ビルドするイメージのタグ
       type: string
-    - default: 'https://github.com/kforetas/sampleapl-demo-manifest.git'
-      description: マニフェスト管理用リポジトリ
-      name: manifest-repo-url
+    - name: manifest-repo-url
+      default: 'https://github.com/kforetas/sampleapl-demo-manifest.git'
       type: string
   workspaces:
     - name: shared-data
   tasks:
     - name: git-clone-manifest
-      params:
-        - name: CRT_FILENAME
-          value: ca-bundle.crt
-        - name: HTTP_PROXY
-          value: ''
-        - name: HTTPS_PROXY
-          value: ''
-        - name: NO_PROXY
-          value: ''
-        - name: SUBDIRECTORY
-          value: manifest
-        - name: USER_HOME
-          value: /home/git
-        - name: DELETE_EXISTING
-          value: 'false'
-        - name: VERBOSE
-          value: 'false'
-        - name: SSL_VERIFY
-          value: 'true'
-        - name: URL
-          value: $(params.manifest-repo-url)
-        - name: REVISION
-          value: main
-        - name: REFSPEC
-          value: ''
-        - name: SUBMODULES
-          value: 'true'
-        - name: DEPTH
-          value: '1'
-        - name: SPARSE_CHECKOUT_DIRECTORIES
-          value: ''
       taskRef:
         params:
           - name: kind
@@ -61,14 +27,24 @@ spec:
           - name: namespace
             value: openshift-pipelines
         resolver: cluster
+      params:
+        - name: URL
+          value: $(params.manifest-repo-url)
+        - name: REVISION
+          value: main
+        - name: SUBDIRECTORY
+          value: "manifest"
+        - name: DELETE_EXISTING
+          value: 'true'
       workspaces:
         - name: output
           workspace: shared-data
+
     - name: update-yaml
       taskRef:
         name: update-manifest
       runAfter:
-        - fetch-repository
+        - git-clone-manifest
       workspaces:
         - name: source
           workspace: shared-data
