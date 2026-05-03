@@ -10,3 +10,6 @@ resources:
   - service.yaml
   - route.yaml
   - update-manifest-pipeline.yaml
+  - release-demo-binding.yaml
+  - release-demo-listener.yaml
+  - release-demo-template.yaml
