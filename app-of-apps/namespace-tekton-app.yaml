@@ -4,7 +4,7 @@ metadata:
   name: tekton-namespace-app
   namespace: openshift-gitops
 spec:
-  project: project-pipeline
+  project: default
   source:
     repoURL: 'https://github.com/kforetas/sampleapl-demo-manifest'
     targetRevision: HEAD

@@ -10,16 +10,3 @@ spec:
   destinations:
     - namespace: demo-*
       server: https://kubernetes.default.svc
----
-apiVersion: argoproj.io/v1alpha1
-kind: AppProject
-metadata:
-  name: project-pipeline
-  namespace: openshift-gitops
-spec:
-  description: "Pipeline for Tekton"
-  sourceRepos:
-    - '*'
-  destinations:
-    - namespace: tekton-*
-      server: https://kubernetes.default.svc
