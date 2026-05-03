@@ -17,7 +17,7 @@ spec:
       workingDir: $(workspaces.source.path)
       script: |
         # 1. ターゲットディレクトリへ移動
-        cd manifest/overlays/$(params.target-env)
+        cd manifest/manifest/overlays/$(params.target-env)
         
         # 2. タグの書き換え
         kustomize edit set image docker.io/rhnconsultingkemori/sampleapl-demo=:$(params.new-tag)
