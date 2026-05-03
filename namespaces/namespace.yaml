@@ -3,4 +3,4 @@ kind: Namespace
 metadata:
   name: tekton-demo
   labels:
-    managed-by: argocd
+    argocd.argoproj.io/managed-by: openshift-gitops
