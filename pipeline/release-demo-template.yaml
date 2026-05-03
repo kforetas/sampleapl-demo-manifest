@@ -17,9 +17,9 @@ spec:
           name: release-demo-pipeline
         params:
           - name: target-env
-            value: $(params.env)
+            value: $(tt.params.env)
           - name: new-tag
-            value: $(params.tag)
+            value: $(tt.params.tag)
         workspaces:
           - name: shared-data
             persistentVolumeClaim:
