@@ -4,7 +4,7 @@ metadata:
   name: deploy-sampleapl-demo-dev
   namespace: openshift-gitops
 spec:
-  project: project-apps
+  project: default
   source:
     repoURL: 'https://github.com/kforetas/sampleapl-demo-manifest'
     targetRevision: HEAD
