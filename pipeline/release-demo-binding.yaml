@@ -1,0 +1,11 @@
+apiVersion: triggers.tekton.dev/v1alpha1
+kind: TriggerBinding
+metadata:
+  name: release-demo-binding
+  namespace: tekton-demo
+spec:
+  params:
+    - name: env
+      value: $(body.env)
+    - name: tag
+      value: $(body.tag)

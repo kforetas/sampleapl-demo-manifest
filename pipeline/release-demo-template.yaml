@@ -1,0 +1,26 @@
+apiVersion: triggers.tekton.dev/v1alpha1
+kind: TriggerTemplate
+metadata:
+  name: release-demo-template
+  namespace: tekton-demo
+spec:
+  params:
+    - name: env
+    - name: tag
+  resourcetemplates:
+    - apiVersion: tekton.dev/v1
+      kind: PipelineRun
+      metadata:
+        generateName: release-demo-run-
+      spec:
+        pipelineRef:
+          name: release-demo-pipeline
+        params:
+          - name: target-env
+            value: $(params.env)
+          - name: new-tag
+            value: $(params.tag)
+        workspaces:
+          - name: shared-data
+            persistentVolumeClaim:
+              claimName: tekton-workspace-pvc
