@@ -20,18 +20,7 @@ spec:
         pipelineRef:
           name: sampleapl-demo-pipeline
         serviceAccountName: pipeline
-        podTemplate:
-          securityContext:
-            fsGroup: 65532
         workspaces:
           - name: shared-data
-            volumeClaimTemplate:
-              spec:
-                accessModes:
-                  - ReadWriteOnce
-                resources:
-                  requests:
-                    storage: 1Gi
-                storageClassName: gp3-csi
-            #persistentVolumeClaim:
-              #claimName: tekton-workspace-pvc
+            persistentVolumeClaim:
+              claimName: tekton-workspace-pvc
