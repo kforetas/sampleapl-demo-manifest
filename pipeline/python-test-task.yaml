@@ -9,23 +9,6 @@ spec:
       name: run-test
       script: |
         #!/usr/bin/env bash
-        echo "--- Current Directory ---"
-        pwd
-        
-        echo "--- Workspace Root Contents ---"
-        ls -F $(workspaces.source.path)
-
-        # sourceディレクトリが存在するかチェックして移動
-        if [ -d "$(workspaces.source.path)/source" ]; then
-          echo "Moving to subdirectory 'source'..."
-          cd $(workspaces.source.path)/source
-        else
-          echo "Subdirectory 'source' not found, staying in root."
-          cd $(workspaces.source.path)
-        fi
-
-        echo "--- Executing Tests in $(pwd) ---"
-        ls -F
 
         # 1. 必要なライブラリのインストール
         pip install -r requirements.txt
@@ -33,7 +16,6 @@ spec:
         # 2. 単体テストの実行
         echo "Starting Unit Tests..."
         python3 test_app.py
-      #workingDir: $(workspaces.source.path)/source
-      workingDir: $(workspaces.source.path)
+      workingDir: $(workspaces.source.path)/source
   workspaces:
     - name: source

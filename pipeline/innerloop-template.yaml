@@ -22,6 +22,13 @@ spec:
         serviceAccountName: pipeline
         workspaces:
           - name: shared-data
-            emptyDir: {}
+            volumeClaimTemplate:
+              spec:
+                accessModes:
+                  - ReadWriteOnce
+                resources:
+                  requests:
+                    storage: 1Gi
+                storageClassName: gp3-csi
             #persistentVolumeClaim:
               #claimName: tekton-workspace-pvc
