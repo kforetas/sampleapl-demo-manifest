@@ -22,5 +22,6 @@ spec:
         serviceAccountName: pipeline
         workspaces:
           - name: shared-data
-            persistentVolumeClaim:
-              claimName: tekton-workspace-pvc
+            emptyDir: {}
+            #persistentVolumeClaim:
+              #claimName: tekton-workspace-pvc
