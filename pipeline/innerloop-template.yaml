@@ -20,6 +20,9 @@ spec:
         pipelineRef:
           name: sampleapl-demo-pipeline
         serviceAccountName: pipeline
+        podTemplate:
+          securityContext:
+            fsGroup: 65532
         workspaces:
           - name: shared-data
             volumeClaimTemplate:
