@@ -15,6 +15,7 @@ resources:
   - release-demo-template.yaml
   - trivy-scan-task.yaml
   - vuln-report-task.yaml
+  - patch-notify-task.yaml
   - wait-argocd-rollout-task.yaml
   - playwright-task.yaml
   - patch-demo-pipeline.yaml

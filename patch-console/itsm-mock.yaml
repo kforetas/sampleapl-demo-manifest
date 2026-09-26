@@ -1,0 +1,84 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: itsm-mock
+  labels:
+    app: itsm-mock
+    app.kubernetes.io/part-of: patch-demo
+    app.openshift.io/runtime: python
+spec:
+  replicas: 1
+  # SQLite (RWO の PVC) を使うため同時に 1 Pod だけにする
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: itsm-mock
+  template:
+    metadata:
+      labels:
+        app: itsm-mock
+    spec:
+      serviceAccountName: default
+      containers:
+        - name: itsm-mock
+          image: 'image-registry.openshift-image-registry.svc:5000/patch-console/patch-demo-console:latest'
+          imagePullPolicy: Always
+          env:
+            - name: APP_MODE
+              value: itsm
+          ports:
+            - containerPort: 8080
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 10
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 256Mi
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: itsm-mock-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: itsm-mock
+  labels:
+    app: itsm-mock
+spec:
+  selector:
+    app: itsm-mock
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: itsm-mock
+  labels:
+    app: itsm-mock
+spec:
+  to:
+    kind: Service
+    name: itsm-mock
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect

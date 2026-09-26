@@ -1,0 +1,26 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: patch-console-app
+  namespace: openshift-gitops
+spec:
+  project: default
+  source:
+    repoURL: 'https://github.com/kforetas/sampleapl-demo-manifest'
+    targetRevision: HEAD
+    path: patch-console
+  destination:
+    server: 'https://kubernetes.default.svc'
+    namespace: patch-console
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+  # ビルドのたびに OpenShift が書き換えるフィールドは差分として扱わない
+  ignoreDifferences:
+    - group: build.openshift.io
+      kind: BuildConfig
+      jsonPointers:
+        - /spec/triggers

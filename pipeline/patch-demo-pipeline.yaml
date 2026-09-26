@@ -44,9 +44,43 @@ spec:
       description: ⑤で修正可能な CRITICAL/HIGH が残っていたら失敗させるか
       name: fail-on-fixable
       type: string
+    - default: ''
+      description: 変更チケット番号（パッチ管理コンソールから起動したときに設定される）
+      name: ticket-number
+      type: string
+    - default: 'http://patch-console.patch-console.svc:8080'
+      description: パッチ管理コンソールの URL
+      name: console-url
+      type: string
+    - default: 'http://itsm-mock.patch-console.svc:8080'
+      description: ITSM モックの URL
+      name: itsm-url
+      type: string
   workspaces:
     - name: shared-data
   tasks:
+    # チケットを「実施中」にする（チケット番号があるときだけ）
+    - name: ticket-start
+      when:
+        - input: $(params.ticket-number)
+          operator: notin
+          values:
+            - ''
+      params:
+        - name: MODE
+          value: start
+        - name: TICKET
+          value: $(params.ticket-number)
+        - name: PIPELINE_RUN
+          value: $(context.pipelineRun.name)
+        - name: CONSOLE_URL
+          value: $(params.console-url)
+        - name: ITSM_URL
+          value: $(params.itsm-url)
+      taskRef:
+        kind: Task
+        name: patch-notify
+
     - name: git-clone-manifest
       params:
         - name: URL
@@ -312,6 +346,27 @@ spec:
       taskRef:
         kind: Task
         name: vuln-report
+      workspaces:
+        - name: data
+          workspace: shared-data
+    # ⑥ コンソールへスキャン結果を送信し、チケットをクローズする
+    - name: notify
+      params:
+        - name: MODE
+          value: finish
+        - name: TICKET
+          value: $(params.ticket-number)
+        - name: PIPELINE_RUN
+          value: $(context.pipelineRun.name)
+        - name: PIPELINE_STATUS
+          value: $(tasks.status)
+        - name: CONSOLE_URL
+          value: $(params.console-url)
+        - name: ITSM_URL
+          value: $(params.itsm-url)
+      taskRef:
+        kind: Task
+        name: patch-notify
       workspaces:
         - name: data
           workspace: shared-data

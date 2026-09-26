@@ -1,0 +1,6 @@
+resources:
+  - build.yaml
+  - pvc.yaml
+  - rbac.yaml
+  - itsm-mock.yaml
+  - console.yaml

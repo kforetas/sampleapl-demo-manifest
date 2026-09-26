@@ -1,0 +1,125 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: patch-notify
+spec:
+  description: |
+    パッチ管理コンソールと ITSM モックへの通知
+    MODE=start  : チケットを「実施中」にする
+    MODE=finish : スキャン結果をコンソールへ送信し、チケットをクローズ（失敗時はレビュー）にする
+    通知先に接続できなくてもパイプラインは失敗させない
+  params:
+    - name: MODE
+      type: string
+    - name: TICKET
+      description: 変更チケット番号（空ならチケット更新はしない）
+      default: ''
+      type: string
+    - name: PIPELINE_RUN
+      type: string
+    - name: PIPELINE_STATUS
+      description: $(tasks.status) の値 (Succeeded / Completed / Failed / None)
+      default: ''
+      type: string
+    - name: CONSOLE_URL
+      type: string
+    - name: ITSM_URL
+      type: string
+  workspaces:
+    - name: data
+      optional: true
+  steps:
+    - name: notify
+      image: 'python:3.9-slim'
+      script: |
+        #!/usr/bin/env python3
+        import json
+        import os
+        import urllib.parse
+        import urllib.request
+
+        MODE = "$(params.MODE)"
+        TICKET = "$(params.TICKET)"
+        RUN = "$(params.PIPELINE_RUN)"
+        STATUS = "$(params.PIPELINE_STATUS)"
+        CONSOLE = "$(params.CONSOLE_URL)".rstrip("/")
+        ITSM = "$(params.ITSM_URL)".rstrip("/")
+        REPORT_DIR = os.path.join("$(workspaces.data.path)", "reports")
+        AUTHOR = "OpenShift Pipelines"
+        SEVERITIES = ("CRITICAL", "HIGH", "MEDIUM", "LOW")
+
+        def call(method, url, body=None):
+            data = json.dumps(body).encode() if body is not None else None
+            req = urllib.request.Request(url, data=data, method=method,
+                                         headers={"Content-Type": "application/json"})
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                return json.load(resp)
+
+        def summarize(label):
+            path = os.path.join(REPORT_DIR, f"{label}.json")
+            if not os.path.exists(path):
+                return None
+            with open(path) as f:
+                data = json.load(f)
+            vulns = {}
+            for result in data.get("Results") or []:
+                for v in result.get("Vulnerabilities") or []:
+                    vulns[(v["VulnerabilityID"], v["PkgName"])] = v
+            counts = {s.lower(): sum(1 for v in vulns.values() if v.get("Severity") == s) for s in SEVERITIES}
+            hc = [v for v in vulns.values() if v.get("Severity") in ("CRITICAL", "HIGH")]
+            counts["fixable"] = sum(1 for v in hc if v.get("FixedVersion"))
+            # 修正可能 → CRITICAL → CVE 番号順
+            hc.sort(key=lambda v: (not v.get("FixedVersion"), v["Severity"] != "CRITICAL", v["VulnerabilityID"]))
+            top = [{"id": v["VulnerabilityID"], "pkg": v["PkgName"], "severity": v["Severity"],
+                    "installed": v.get("InstalledVersion", ""), "fixed": v.get("FixedVersion", ""),
+                    "title": v.get("Title", "")} for v in hc[:15]]
+            os_info = (data.get("Metadata") or {}).get("OS") or {}
+            return {"run": RUN, "label": label, "image": data.get("ArtifactName"),
+                    "os": f'{os_info.get("Family", "")} {os_info.get("Name", "")}'.strip(),
+                    "counts": counts, "top": top}
+
+        def ticket_sys_id():
+            q = urllib.parse.urlencode({"sysparm_query": f"number={TICKET}"})
+            result = call("GET", f"{ITSM}/api/now/table/change_request?{q}")["result"]
+            return result[0]["sys_id"] if result else None
+
+        def update_ticket(body):
+            sys_id = ticket_sys_id()
+            if not sys_id:
+                print(f"チケット {TICKET} が見つかりません")
+                return
+            body["author"] = AUTHOR
+            call("PATCH", f"{ITSM}/api/now/table/change_request/{sys_id}", body)
+            print(f"チケット {TICKET} を更新しました: state={body.get('state')}")
+
+        try:
+            if MODE == "start":
+                if TICKET:
+                    update_ticket({"state": -1, "work_notes": f"パイプライン {RUN} を開始しました。"})
+            else:
+                scans = {label: summarize(label) for label in ("before", "after")}
+                for label, scan in scans.items():
+                    if scan is None:
+                        continue
+                    try:
+                        call("POST", f"{CONSOLE}/api/scans", scan)
+                        print(f"{label} のスキャン結果をコンソールへ送信しました")
+                    except Exception as e:
+                        print(f"コンソールへの送信に失敗しました ({label}): {e}")
+
+                if TICKET:
+                    b, a = scans.get("before"), scans.get("after")
+                    lines = [f"パイプライン {RUN}: {STATUS}"]
+                    if a:
+                        lines.append(f"新しいイメージ: {a['image']} ({a['os']})")
+                    if b and a:
+                        for key, name in (("critical", "CRITICAL"), ("high", "HIGH"), ("fixable", "修正可能 (C+H)")):
+                            lines.append(f"{name}: {b['counts'][key]} → {a['counts'][key]}")
+                    note = "\n".join(lines)
+                    if STATUS in ("Succeeded", "Completed"):
+                        update_ticket({"state": 3, "close_code": "成功 (Successful)",
+                                       "close_notes": note, "work_notes": "パッチ適用が完了しました。\n" + note})
+                    else:
+                        update_ticket({"state": 0, "work_notes": "パイプラインが失敗しました。確認が必要です。\n" + note})
+        except Exception as e:
+            print(f"通知に失敗しました: {e}")

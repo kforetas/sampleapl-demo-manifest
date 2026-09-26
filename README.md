@@ -32,3 +32,18 @@ curl -k -X POST $PATCH_URL -H 'Content-Type: application/json' -d '{"failOnFixab
 - 結果は PipelineRun の report タスクのログに Before/After の比較表として出力される
 - source リポジトリの main に push すると innerloop が dev のタグを上書きするため、デモ中は push しない
 - ArgoCD への即時反映には patch-demo-rbac.yaml の権限を使う（権限がない場合はポーリング (最大3分) で反映される）
+
+## パッチ管理コンソール (patch-console)
+画面からパッチ適用を実行し、ITSM モック (ServiceNow 想定) のチケット起票〜クローズまでを見せる。
+ソースは https://github.com/kforetas/patch-demo-console
+
+### デプロイ
+oc apply -f https://raw.githubusercontent.com/kforetas/sampleapl-demo-manifest/refs/heads/main/app-of-apps/patch-console-app.yaml
+
+初回はクラスタ内ビルドが終わるまで Pod が ImagePullBackOff になるが、ビルド完了後に自動で起動する
+oc logs -f bc/patch-demo-console -n patch-console
+
+### URL
+oc get route -n patch-console
+- patch-console : パッチ管理コンソール
+- itsm-mock     : ITSM モック

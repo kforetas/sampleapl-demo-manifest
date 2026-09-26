@@ -1,0 +1,92 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: patch-console
+  labels:
+    app: patch-console
+    app.kubernetes.io/part-of: patch-demo
+    app.openshift.io/runtime: python
+spec:
+  replicas: 1
+  # SQLite (RWO の PVC) を使うため同時に 1 Pod だけにする
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: patch-console
+  template:
+    metadata:
+      labels:
+        app: patch-console
+    spec:
+      serviceAccountName: patch-console
+      containers:
+        - name: patch-console
+          image: 'image-registry.openshift-image-registry.svc:5000/patch-console/patch-demo-console:latest'
+          imagePullPolicy: Always
+          env:
+            - name: APP_MODE
+              value: console
+            - name: ITSM_URL
+              value: 'http://itsm-mock:8080'
+            - name: PIPELINE_NAMESPACE
+              value: tekton-demo
+            - name: PIPELINE_NAME
+              value: patch-demo-pipeline
+            - name: PREPARE_BASE_TAG
+              value: '1-133.1692772345'
+          ports:
+            - containerPort: 8080
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 10
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 256Mi
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: patch-console-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: patch-console
+  labels:
+    app: patch-console
+spec:
+  selector:
+    app: patch-console
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: patch-console
+  labels:
+    app: patch-console
+spec:
+  to:
+    kind: Service
+    name: patch-console
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect

@@ -1,0 +1,69 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: patch-console
+---
+# PipelineRun の起動と進行状況の参照
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: patch-console-pipeline
+  namespace: tekton-demo
+rules:
+  - apiGroups:
+      - tekton.dev
+    resources:
+      - pipelineruns
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+  - apiGroups:
+      - tekton.dev
+    resources:
+      - taskruns
+    verbs:
+      - get
+      - list
+      - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: patch-console-pipeline
+  namespace: tekton-demo
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: patch-console-pipeline
+subjects:
+  - kind: ServiceAccount
+    name: patch-console
+    namespace: patch-console
+---
+# ITSM モックの Route からリンク先 URL を組み立てるため
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: patch-console-routes
+rules:
+  - apiGroups:
+      - route.openshift.io
+    resources:
+      - routes
+    verbs:
+      - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: patch-console-routes
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: patch-console-routes
+subjects:
+  - kind: ServiceAccount
+    name: patch-console
+    namespace: patch-console
