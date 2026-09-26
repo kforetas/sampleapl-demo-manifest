@@ -15,6 +15,10 @@ spec:
       description: 修正可能な CRITICAL/HIGH が残っていたら失敗させるか
       default: 'false'
       type: string
+    - name: IGNORE_FILE
+      description: 除外設定ファイル (.trivyignore.yaml) のワークスペース内パス。存在しなければ無視する
+      default: ''
+      type: string
     - name: TRIVY_IMAGE
       default: 'docker.io/aquasec/trivy:latest'
       type: string
@@ -43,8 +47,16 @@ spec:
         mkdir -p "$REPORT_DIR"
         chmod 777 "$REPORT_DIR" 2>/dev/null || true
 
+        IGNORE_OPT=""
+        IGNORE_PATH="$(workspaces.data.path)/$(params.IGNORE_FILE)"
+        if [ -n "$(params.IGNORE_FILE)" ] && [ -f "$IGNORE_PATH" ]; then
+          echo "除外設定を適用します: $(params.IGNORE_FILE)"
+          grep -E '^\s*-?\s*(id|statement):' "$IGNORE_PATH" || true
+          IGNORE_OPT="--ignorefile $IGNORE_PATH"
+        fi
+
         echo "Scanning $(params.IMAGE) ..."
-        trivy image --quiet --scanners vuln --format json \
+        trivy image --quiet --scanners vuln --format json $IGNORE_OPT \
           --output "$REPORT_DIR/$(params.LABEL).json" "$(params.IMAGE)"
 
         # コンソールで見せる用のテーブル表示

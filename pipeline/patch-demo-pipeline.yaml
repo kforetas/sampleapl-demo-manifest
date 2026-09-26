@@ -113,15 +113,17 @@ spec:
         - name: data
           workspace: shared-data
 
-    # ① 現在のイメージの脆弱性スキャン
+    # ① 現在のイメージの脆弱性スキャン（除外設定 source/.trivyignore.yaml を使うため clone 後に実行）
     - name: scan-before
       runAfter:
-        - get-current-tag
+        - git-clone-source
       params:
         - name: IMAGE
           value: 'docker.io/$(params.docker-username)/sampleapl-demo:$(tasks.get-current-tag.results.current-tag)'
         - name: LABEL
           value: before
+        - name: IGNORE_FILE
+          value: source/.trivyignore.yaml
         - name: FAIL_ON_FIXABLE
           value: 'false'
       taskRef:
@@ -293,6 +295,8 @@ spec:
           value: 'docker.io/$(params.docker-username)/sampleapl-demo:$(tasks.get-current-tag.results.new-tag)'
         - name: LABEL
           value: after
+        - name: IGNORE_FILE
+          value: source/.trivyignore.yaml
         - name: FAIL_ON_FIXABLE
           value: $(params.fail-on-fixable)
       taskRef:
