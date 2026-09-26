@@ -1,0 +1,46 @@
+# wait-argocd-rollout Task 用の権限
+# dev 環境の Deployment / Route の参照
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: tekton-pipeline-view
+  namespace: demo-dev
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: view
+subjects:
+  - kind: ServiceAccount
+    name: pipeline
+    namespace: tekton-demo
+---
+# ArgoCD Application への refresh 要求
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: tekton-argocd-refresh
+  namespace: openshift-gitops
+rules:
+  - apiGroups:
+      - argoproj.io
+    resources:
+      - applications
+    resourceNames:
+      - deploy-sampleapl-demo-dev
+    verbs:
+      - get
+      - patch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: tekton-argocd-refresh
+  namespace: openshift-gitops
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: tekton-argocd-refresh
+subjects:
+  - kind: ServiceAccount
+    name: pipeline
+    namespace: tekton-demo

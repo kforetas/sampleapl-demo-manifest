@@ -1,0 +1,313 @@
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: patch-demo-pipeline
+spec:
+  description: |
+    コンテナアプリのパッチ適用デモ
+    ①脆弱性スキャン → ②最新ベースイメージで再ビルド → ③dev へリリース
+    → ④Playwright で画面テスト → ⑤再スキャン → ⑥Before/After レポート
+  params:
+    - default: 'https://github.com/kforetas/sampleapl-demo.git'
+      description: アプリのソースコードリポジトリ
+      name: repo-url
+      type: string
+    - default: 'https://github.com/kforetas/sampleapl-demo-manifest.git'
+      description: マニフェスト管理用リポジトリ
+      name: manifest-repo-url
+      type: string
+    - default: rhnconsultingkemori
+      description: docker hub username
+      name: docker-username
+      type: string
+    - default: dev
+      description: 環境
+      name: target-env
+      type: string
+    - default: deploy-sampleapl-demo-dev
+      description: target-env に対応する ArgoCD Application
+      name: argocd-app
+      type: string
+    - default: demo-dev
+      description: target-env に対応するデプロイ先 Namespace
+      name: app-namespace
+      type: string
+    - default: registry.access.redhat.com/ubi9/python-39
+      description: ベースイメージのリポジトリ
+      name: base-image-repo
+      type: string
+    - default: latest
+      description: ベースイメージのタグ（デモ準備時は古いタグを指定する）
+      name: base-image-tag
+      type: string
+    - default: 'true'
+      description: ⑤で修正可能な CRITICAL/HIGH が残っていたら失敗させるか
+      name: fail-on-fixable
+      type: string
+  workspaces:
+    - name: shared-data
+  tasks:
+    - name: git-clone-manifest
+      params:
+        - name: URL
+          value: $(params.manifest-repo-url)
+        - name: REVISION
+          value: main
+        - name: SUBDIRECTORY
+          value: manifest
+        - name: DELETE_EXISTING
+          value: 'true'
+      taskRef:
+        params:
+          - name: kind
+            value: task
+          - name: name
+            value: git-clone
+          - name: namespace
+            value: openshift-pipelines
+        resolver: cluster
+      workspaces:
+        - name: output
+          workspace: shared-data
+
+    # 現在 dev にデプロイされているタグを取得し、再ビルド後のタグを決める
+    #   current-tag     : a632b04...            (または a632b04...-p202609261030)
+    #   source-revision : a632b04...            (アプリのコードは同じコミットを使う)
+    #   new-tag         : a632b04...-p202609261530
+    - name: get-current-tag
+      runAfter:
+        - git-clone-manifest
+      params:
+        - name: target-env
+          value: $(params.target-env)
+      taskSpec:
+        params:
+          - name: target-env
+            type: string
+        results:
+          - name: current-tag
+            type: string
+          - name: source-revision
+            type: string
+          - name: new-tag
+            type: string
+        workspaces:
+          - name: data
+        steps:
+          - image: alpine
+            name: read-tag
+            script: |
+              #!/bin/sh
+              set -eu
+              KFILE=$(workspaces.data.path)/manifest/manifest/overlays/$(params.target-env)/kustomization.yaml
+              CUR=$(sed -n 's/^[[:space:]]*newTag:[[:space:]]*//p' "$KFILE" | head -1 | tr -d "\"' ")
+              REV="${CUR%%-p[0-9]*}"
+              NEW="${REV}-p$(date +%Y%m%d%H%M)"
+              echo "current-tag    : ${CUR}"
+              echo "source-revision: ${REV}"
+              echo "new-tag        : ${NEW}"
+              echo -n "${CUR}" > $(results.current-tag.path)
+              echo -n "${REV}" > $(results.source-revision.path)
+              echo -n "${NEW}" > $(results.new-tag.path)
+      workspaces:
+        - name: data
+          workspace: shared-data
+
+    # ① 現在のイメージの脆弱性スキャン
+    - name: scan-before
+      runAfter:
+        - get-current-tag
+      params:
+        - name: IMAGE
+          value: 'docker.io/$(params.docker-username)/sampleapl-demo:$(tasks.get-current-tag.results.current-tag)'
+        - name: LABEL
+          value: before
+        - name: FAIL_ON_FIXABLE
+          value: 'false'
+      taskRef:
+        kind: Task
+        name: trivy-scan
+      workspaces:
+        - name: data
+          workspace: shared-data
+
+    - name: git-clone-source
+      runAfter:
+        - get-current-tag
+      params:
+        - name: URL
+          value: $(params.repo-url)
+        - name: REVISION
+          value: $(tasks.get-current-tag.results.source-revision)
+        - name: SUBDIRECTORY
+          value: source
+        - name: DELETE_EXISTING
+          value: 'true'
+      taskRef:
+        params:
+          - name: kind
+            value: task
+          - name: name
+            value: git-clone
+          - name: namespace
+            value: openshift-pipelines
+        resolver: cluster
+      workspaces:
+        - name: output
+          workspace: shared-data
+
+    # 最新ベースイメージの digest を解決（タグではなく digest でビルドして再現性を確保）
+    - name: resolve-base-image
+      params:
+        - name: repo
+          value: $(params.base-image-repo)
+        - name: tag
+          value: $(params.base-image-tag)
+      taskSpec:
+        params:
+          - name: repo
+            type: string
+          - name: tag
+            type: string
+        results:
+          - name: base-image
+            type: string
+        steps:
+          - image: 'quay.io/skopeo/stable:latest'
+            name: inspect
+            env:
+              - name: HOME
+                value: /tmp
+            script: |
+              #!/bin/sh
+              set -eu
+              REF="docker://$(params.repo):$(params.tag)"
+              skopeo inspect --no-tags --format 'Created: {{.Created}}  Version: {{index .Labels "version"}}-{{index .Labels "release"}}' "$REF"
+              DIGEST=$(skopeo inspect --no-tags --format '{{.Digest}}' "$REF")
+              echo "Base image: $(params.repo)@${DIGEST}"
+              echo -n "$(params.repo)@${DIGEST}" > $(results.base-image.path)
+
+    # ② 最新ベースイメージで再ビルド（アプリのコードは変更なし）
+    - name: buildah
+      runAfter:
+        - scan-before
+        - git-clone-source
+        - resolve-base-image
+      params:
+        - name: IMAGE
+          value: 'docker.io/$(params.docker-username)/sampleapl-demo:$(tasks.get-current-tag.results.new-tag)'
+        - name: DOCKERFILE
+          value: ./Dockerfile
+        - name: BUILD_ARGS
+          value:
+            - 'BASE_IMAGE=$(tasks.resolve-base-image.results.base-image)'
+        - name: CONTEXT
+          value: source
+        - name: STORAGE_DRIVER
+          value: vfs
+        - name: FORMAT
+          value: oci
+        - name: SKIP_PUSH
+          value: 'false'
+        - name: TLS_VERIFY
+          value: 'true'
+      taskRef:
+        params:
+          - name: kind
+            value: task
+          - name: name
+            value: buildah
+          - name: namespace
+            value: openshift-pipelines
+        resolver: cluster
+      workspaces:
+        - name: source
+          workspace: shared-data
+
+    # ③ 開発環境へリリース（GitOps: マニフェストのタグを書き換えて ArgoCD に反映させる）
+    - name: update-gitops
+      runAfter:
+        - buildah
+      params:
+        - name: DELETE_EXISTING
+          value: 'false'
+        - name: GIT_USER_NAME
+          value: kforetas
+        - name: GIT_USER_EMAIL
+          value: kforetxp@yahoo.co.jp
+        - name: GIT_SCRIPT
+          value: |-
+            cd $(workspaces.source.path)/manifest/manifest/overlays/$(params.target-env)
+            sed -i "s|newTag:.*|newTag: $(tasks.get-current-tag.results.new-tag)|g" kustomization.yaml
+            git add .
+            git commit -m "Patch $(params.target-env) image to $(tasks.get-current-tag.results.new-tag)" \
+              -m "Base image: $(tasks.resolve-base-image.results.base-image)"
+            git push origin HEAD:main
+      taskRef:
+        params:
+          - name: kind
+            value: task
+          - name: name
+            value: git-cli
+          - name: namespace
+            value: openshift-pipelines
+        resolver: cluster
+      workspaces:
+        - name: source
+          workspace: shared-data
+
+    - name: wait-rollout
+      runAfter:
+        - update-gitops
+      params:
+        - name: ARGOCD_APP
+          value: $(params.argocd-app)
+        - name: NAMESPACE
+          value: $(params.app-namespace)
+        - name: TAG
+          value: $(tasks.get-current-tag.results.new-tag)
+      taskRef:
+        kind: Task
+        name: wait-argocd-rollout
+
+    # ④ Playwright で画面テスト
+    - name: e2e-test
+      runAfter:
+        - wait-rollout
+      params:
+        - name: BASE_URL
+          value: $(tasks.wait-rollout.results.app-url)
+      taskRef:
+        kind: Task
+        name: playwright-e2e
+      workspaces:
+        - name: source
+          workspace: shared-data
+
+    # ⑤ 再ビルドしたイメージの脆弱性スキャン
+    - name: scan-after
+      runAfter:
+        - e2e-test
+      params:
+        - name: IMAGE
+          value: 'docker.io/$(params.docker-username)/sampleapl-demo:$(tasks.get-current-tag.results.new-tag)'
+        - name: LABEL
+          value: after
+        - name: FAIL_ON_FIXABLE
+          value: $(params.fail-on-fixable)
+      taskRef:
+        kind: Task
+        name: trivy-scan
+      workspaces:
+        - name: data
+          workspace: shared-data
+
+  # ⑥ Before/After の比較レポート（途中で失敗しても実行）
+  finally:
+    - name: report
+      taskRef:
+        kind: Task
+        name: vuln-report
+      workspaces:
+        - name: data
+          workspace: shared-data

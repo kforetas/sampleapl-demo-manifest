@@ -1,0 +1,42 @@
+apiVersion: triggers.tekton.dev/v1beta1
+kind: EventListener
+metadata:
+  name: patch-demo-listener
+spec:
+  serviceAccountName: pipeline
+  triggers:
+    - name: patch-demo-trigger
+      interceptors:
+        # body の項目は省略可能。省略時は最新ベースイメージ + ⑤でゲートあり
+        - params:
+            - name: overlays
+              value:
+                - key: base_image_tag
+                  expression: "has(body.baseImageTag) ? body.baseImageTag : 'latest'"
+                - key: fail_on_fixable
+                  expression: "has(body.failOnFixable) ? string(body.failOnFixable) : 'true'"
+          ref:
+            kind: ClusterInterceptor
+            name: cel
+      bindings:
+        - kind: TriggerBinding
+          ref: patch-demo-binding
+      template:
+        ref: patch-demo-template
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: el-patch-demo-listener
+  labels:
+    eventlistener: patch-demo-listener
+spec:
+  to:
+    kind: Service
+    name: el-patch-demo-listener
+    weight: 100
+  port:
+    targetPort: http-listener
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Allow

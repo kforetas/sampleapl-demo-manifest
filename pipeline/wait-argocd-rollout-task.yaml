@@ -1,0 +1,56 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: wait-argocd-rollout
+spec:
+  description: ArgoCD に即時 refresh を要求し、Deployment が指定タグで rollout 完了するまで待つ
+  params:
+    - name: ARGOCD_APP
+      type: string
+    - name: NAMESPACE
+      description: アプリのデプロイ先 Namespace
+      type: string
+    - name: DEPLOYMENT
+      default: sampleapl-demo
+      type: string
+    - name: ROUTE
+      default: sampleapl-demo
+      type: string
+    - name: TAG
+      description: 反映を待つイメージタグ
+      type: string
+    - name: TIMEOUT_SECONDS
+      default: '600'
+      type: string
+  results:
+    - name: app-url
+      type: string
+  steps:
+    - name: wait
+      image: 'image-registry.openshift-image-registry.svc:5000/openshift/cli:latest'
+      script: |
+        #!/usr/bin/env bash
+        set -eu
+
+        # ArgoCD のポーリング (既定 3 分) を待たずに即時反映させる
+        oc annotate applications.argoproj.io "$(params.ARGOCD_APP)" -n openshift-gitops \
+          argocd.argoproj.io/refresh=normal --overwrite \
+          || echo "refresh annotation skipped (ArgoCD のポーリングで反映されるのを待ちます)"
+
+        echo "Waiting for $(params.DEPLOYMENT) to use tag $(params.TAG) ..."
+        DEADLINE=$(( $(date +%s) + $(params.TIMEOUT_SECONDS) ))
+        until oc get deployment "$(params.DEPLOYMENT)" -n "$(params.NAMESPACE)" \
+            -o jsonpath='{.spec.template.spec.containers[0].image}' | grep -q ":$(params.TAG)$"; do
+          if [ "$(date +%s)" -ge "$DEADLINE" ]; then
+            echo "Timed out waiting for ArgoCD sync"
+            exit 1
+          fi
+          sleep 5
+        done
+
+        oc rollout status deployment/"$(params.DEPLOYMENT)" -n "$(params.NAMESPACE)" \
+          --timeout="$(params.TIMEOUT_SECONDS)s"
+
+        HOST=$(oc get route "$(params.ROUTE)" -n "$(params.NAMESPACE)" -o jsonpath='{.spec.host}')
+        echo "App URL: https://${HOST}"
+        echo -n "https://${HOST}" > "$(results.app-url.path)"

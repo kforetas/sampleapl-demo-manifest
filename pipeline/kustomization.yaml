@@ -13,3 +13,12 @@ resources:
   - release-demo-binding.yaml
   - release-demo-listener.yaml
   - release-demo-template.yaml
+  - trivy-scan-task.yaml
+  - vuln-report-task.yaml
+  - wait-argocd-rollout-task.yaml
+  - playwright-task.yaml
+  - patch-demo-pipeline.yaml
+  - patch-demo-binding.yaml
+  - patch-demo-template.yaml
+  - patch-demo-listener.yaml
+  - patch-demo-rbac.yaml

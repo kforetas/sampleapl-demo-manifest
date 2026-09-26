@@ -1,0 +1,37 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: playwright-e2e
+spec:
+  description: source/e2e の Playwright テストを指定 URL に対して実行する
+  params:
+    - name: BASE_URL
+      type: string
+    - name: PLAYWRIGHT_IMAGE
+      description: e2e/package.json の @playwright/test とバージョンを合わせる
+      default: 'mcr.microsoft.com/playwright:v1.49.1-noble'
+      type: string
+  workspaces:
+    - name: source
+  steps:
+    - name: run-e2e
+      image: $(params.PLAYWRIGHT_IMAGE)
+      env:
+        - name: HOME
+          value: /tmp
+        - name: BASE_URL
+          value: $(params.BASE_URL)
+        - name: REPORT_DIR
+          value: $(workspaces.source.path)/reports/playwright
+      script: |
+        #!/usr/bin/env bash
+        set -eu
+        mkdir -p "$REPORT_DIR"
+
+        # git-clone で作られたディレクトリは書き込めない場合があるため /tmp にコピーして実行
+        cp -r $(workspaces.source.path)/source/e2e /tmp/e2e
+        cd /tmp/e2e
+        npm install --no-audit --no-fund
+
+        echo "Running E2E tests against ${BASE_URL}"
+        npx playwright test

@@ -1,0 +1,79 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: vuln-report
+spec:
+  description: reports/before.json と reports/after.json を比較してパッチ適用結果を表示する
+  workspaces:
+    - name: data
+  steps:
+    - name: report
+      image: 'python:3.9-slim'
+      script: |
+        #!/usr/bin/env python3
+        import json
+        import os
+
+        REPORT_DIR = "$(workspaces.data.path)/reports"
+        SEVERITIES = ["CRITICAL", "HIGH", "MEDIUM", "LOW"]
+
+        def load(label):
+            path = os.path.join(REPORT_DIR, f"{label}.json")
+            if not os.path.exists(path):
+                return None
+            with open(path) as f:
+                data = json.load(f)
+            vulns = {}
+            for result in data.get("Results") or []:
+                for v in result.get("Vulnerabilities") or []:
+                    vulns[(v["VulnerabilityID"], v["PkgName"])] = v
+            os_info = (data.get("Metadata") or {}).get("OS") or {}
+            return {
+                "image": data.get("ArtifactName", "-"),
+                "os": f'{os_info.get("Family", "")} {os_info.get("Name", "")}'.strip() or "-",
+                "vulns": vulns,
+            }
+
+        def count(report, severity, fixable_only=False):
+            if report is None:
+                return None
+            return sum(1 for v in report["vulns"].values()
+                       if v.get("Severity") == severity and (v.get("FixedVersion") or not fixable_only))
+
+        def fmt(n):
+            return "-" if n is None else str(n)
+
+        before, after = load("before"), load("after")
+
+        print("=" * 60)
+        print(" コンテナイメージ パッチ適用結果")
+        print("=" * 60)
+        for label, r in (("Before", before), ("After", after)):
+            if r:
+                print(f" {label:<7}: {r['image']}  ({r['os']})")
+            else:
+                print(f" {label:<7}: スキャン未実施")
+        print("-" * 60)
+        print(f" {'Severity':<18}{'Before':>10}{'After':>10}{'差分':>10}")
+        rows = [(s, count(before, s), count(after, s)) for s in SEVERITIES]
+        rows.append(("修正可能(C+H)",
+                     None if before is None else count(before, "CRITICAL", True) + count(before, "HIGH", True),
+                     None if after is None else count(after, "CRITICAL", True) + count(after, "HIGH", True)))
+        for name, b, a in rows:
+            diff = "-" if a is None or b is None else f"{a - b:+d}"
+            print(f" {name:<18}{fmt(b):>10}{fmt(a):>10}{diff:>10}")
+        print("-" * 60)
+
+        if before and after:
+            fixed = sorted(
+                (v for k, v in before["vulns"].items()
+                 if k not in after["vulns"] and v.get("Severity") in ("CRITICAL", "HIGH")),
+                key=lambda v: (v["Severity"] != "CRITICAL", v["VulnerabilityID"]),
+            )
+            print(f" 解消された CRITICAL/HIGH: {len(fixed)} 件")
+            for v in fixed[:20]:
+                print(f"   {v['Severity']:<9}{v['VulnerabilityID']:<20}{v['PkgName']} "
+                      f"{v.get('InstalledVersion', '')} -> {v.get('FixedVersion', '')}")
+            if len(fixed) > 20:
+                print(f"   ... ほか {len(fixed) - 20} 件")
+        print("=" * 60)

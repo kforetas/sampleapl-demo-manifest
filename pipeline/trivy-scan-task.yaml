@@ -1,0 +1,84 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: trivy-scan
+spec:
+  description: Trivy でコンテナイメージの脆弱性をスキャンし、結果を reports/<LABEL>.json に保存する
+  params:
+    - name: IMAGE
+      description: スキャン対象のイメージ
+      type: string
+    - name: LABEL
+      description: レポート名 (before / after)
+      type: string
+    - name: FAIL_ON_FIXABLE
+      description: 修正可能な CRITICAL/HIGH が残っていたら失敗させるか
+      default: 'false'
+      type: string
+    - name: TRIVY_IMAGE
+      default: 'docker.io/aquasec/trivy:latest'
+      type: string
+  results:
+    - name: critical
+      type: string
+    - name: high
+      type: string
+    - name: fixable
+      description: 修正版が存在する CRITICAL + HIGH の件数
+      type: string
+  workspaces:
+    - name: data
+  steps:
+    - name: scan
+      image: $(params.TRIVY_IMAGE)
+      env:
+        - name: HOME
+          value: /tmp
+        - name: TRIVY_CACHE_DIR
+          value: $(workspaces.data.path)/.trivy-cache
+      script: |
+        #!/bin/sh
+        set -eu
+        REPORT_DIR=$(workspaces.data.path)/reports
+        mkdir -p "$REPORT_DIR"
+        chmod 777 "$REPORT_DIR" 2>/dev/null || true
+
+        echo "Scanning $(params.IMAGE) ..."
+        trivy image --quiet --scanners vuln --format json \
+          --output "$REPORT_DIR/$(params.LABEL).json" "$(params.IMAGE)"
+
+        # コンソールで見せる用のテーブル表示
+        trivy convert --format table --severity CRITICAL,HIGH "$REPORT_DIR/$(params.LABEL).json"
+    - name: summarize
+      image: 'python:3.9-slim'
+      script: |
+        #!/usr/bin/env python3
+        import json
+        import sys
+
+        with open("$(workspaces.data.path)/reports/$(params.LABEL).json") as f:
+            data = json.load(f)
+
+        vulns = {}
+        for result in data.get("Results") or []:
+            for v in result.get("Vulnerabilities") or []:
+                vulns[(v["VulnerabilityID"], v["PkgName"])] = v
+
+        def count(severity, fixable_only=False):
+            return sum(1 for v in vulns.values()
+                       if v.get("Severity") == severity and (v.get("FixedVersion") or not fixable_only))
+
+        critical, high = count("CRITICAL"), count("HIGH")
+        fixable = count("CRITICAL", True) + count("HIGH", True)
+
+        print(f"[$(params.LABEL)] CRITICAL={critical} HIGH={high} (修正可能 {fixable} 件)")
+        with open("$(results.critical.path)", "w") as f:
+            f.write(str(critical))
+        with open("$(results.high.path)", "w") as f:
+            f.write(str(high))
+        with open("$(results.fixable.path)", "w") as f:
+            f.write(str(fixable))
+
+        if "$(params.FAIL_ON_FIXABLE)" == "true" and fixable > 0:
+            print(f"修正可能な CRITICAL/HIGH の脆弱性が {fixable} 件残っています")
+            sys.exit(1)

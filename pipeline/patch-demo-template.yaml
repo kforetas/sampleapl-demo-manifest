@@ -1,0 +1,36 @@
+apiVersion: triggers.tekton.dev/v1beta1
+kind: TriggerTemplate
+metadata:
+  name: patch-demo-template
+spec:
+  params:
+    - name: base-image-tag
+      default: latest
+    - name: fail-on-fixable
+      default: 'true'
+  resourcetemplates:
+    - apiVersion: tekton.dev/v1
+      kind: PipelineRun
+      metadata:
+        generateName: patch-demo-run-
+      spec:
+        params:
+          - name: base-image-tag
+            value: $(tt.params.base-image-tag)
+          - name: fail-on-fixable
+            value: $(tt.params.fail-on-fixable)
+        pipelineRef:
+          name: patch-demo-pipeline
+        taskRunTemplate:
+          serviceAccountName: pipeline
+        workspaces:
+          # 既存パイプラインとの競合を避けるため実行ごとに PVC を作成
+          - name: shared-data
+            volumeClaimTemplate:
+              spec:
+                accessModes:
+                  - ReadWriteOnce
+                resources:
+                  requests:
+                    storage: 2Gi
+                storageClassName: gp3-csi

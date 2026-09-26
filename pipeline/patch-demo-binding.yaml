@@ -1,0 +1,10 @@
+apiVersion: triggers.tekton.dev/v1beta1
+kind: TriggerBinding
+metadata:
+  name: patch-demo-binding
+spec:
+  params:
+    - name: base-image-tag
+      value: $(extensions.base_image_tag)
+    - name: fail-on-fixable
+      value: $(extensions.fail_on_fixable)
