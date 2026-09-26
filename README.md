@@ -18,6 +18,12 @@ skopeo list-tags docker://registry.access.redhat.com/ubi9/python-39
 PATCH_URL=https://$(oc get route el-patch-demo-listener -n tekton-demo -o jsonpath='{.spec.host}')
 curl -k -X POST $PATCH_URL -H 'Content-Type: application/json' -d '{"baseImageTag":"<古いタグ>","failOnFixable":"false"}'
 
+[sample]
+PATCH_URL=https://el-patch-demo-listener-tekton-demo.apps.rosa.rosa-tcnb7.yrmn.p3.openshiftapps.com
+curl -k -X POST $PATCH_URL -H 'Content-Type: application/json' -d '{"baseImageTag":"1-133.1692772345","failOnFixable":"false"}'
+
+脆弱性アリモード-Tag: 89f264b1a6cb2a1ce700846be4d92937e94fc2e3-p202609260955
+
 ### デモ本番: 最新ベースイメージでパッチ適用
 curl -k -X POST $PATCH_URL -H 'Content-Type: application/json' -d '{}'
 
