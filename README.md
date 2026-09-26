@@ -26,6 +26,7 @@ curl -k -X POST $PATCH_URL -H 'Content-Type: application/json' -d '{"baseImageTa
 
 ### デモ本番: 最新ベースイメージでパッチ適用
 curl -k -X POST $PATCH_URL -H 'Content-Type: application/json' -d '{}'
+curl -k -X POST $PATCH_URL -H 'Content-Type: application/json' -d '{"failOnFixable":"false"}'
 
 ### 補足
 - 結果は PipelineRun の report タスクのログに Before/After の比較表として出力される
