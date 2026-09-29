@@ -5,4 +5,4 @@ resources:
 images:
   - name: docker.io/rhnconsultingkemori/sampleapl-demo
     newName: docker.io/rhnconsultingkemori/sampleapl-demo
-    newTag: 7e95ffdb9553256b7c6509b48b61a29148bb9717-p202609261102
+    newTag: b9d44da6c32efc84db4b78e305da6d7780a84199
