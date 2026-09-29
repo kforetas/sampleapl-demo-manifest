@@ -42,6 +42,10 @@ app_healthy() { # ArgoCD Application 名
   echo "[ \"\$(oc get applications.argoproj.io $1 -n openshift-gitops -o jsonpath='{.status.sync.status}/{.status.health.status}')\" = Synced/Healthy ]"
 }
 
+app_synced() { # ArgoCD Application 名（同期が成功していればよい）
+  echo "[ \"\$(oc get applications.argoproj.io $1 -n openshift-gitops -o jsonpath='{.status.sync.status}/{.status.operationState.phase}')\" = Synced/Succeeded ]"
+}
+
 # ------------------------------------------------------------------ 0. 前提確認
 log "0. 前提確認"
 oc whoami >/dev/null 2>&1 || die "oc login してから実行してください"
@@ -52,6 +56,18 @@ echo "ユーザー: $(oc whoami) / クラスタ: $(oc whoami --show-server)"
 if [ -z "${GITHUB_TOKEN:-}" ]; then read -rsp "GitHub ($GITHUB_USER) のトークン: " GITHUB_TOKEN; echo; fi
 if [ -z "${DOCKERHUB_TOKEN:-}" ]; then read -rsp "Docker Hub ($DOCKERHUB_USER) のトークン: " DOCKERHUB_TOKEN; echo; fi
 [ -n "$GITHUB_TOKEN" ] && [ -n "$DOCKERHUB_TOKEN" ] || die "トークンが入力されていません"
+
+# 入力ミス（途中までしか貼り付けられていない等）をここで検知する
+# トークンはコマンドライン引数に載せず、プロセス置換で渡す
+GH_REPO=$(curl -s -H @<(printf 'Authorization: token %s' "$GITHUB_TOKEN") \
+  "https://api.github.com/repos/$GITHUB_USER/sampleapl-demo-manifest")
+echo "$GH_REPO" | grep -q '"push": *true' \
+  || die "GitHub のトークンが無効か、sampleapl-demo-manifest への push 権限がありません（トークン長: ${#GITHUB_TOKEN} 文字）"
+DH_CODE=$(curl -s -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' \
+  --data @<(printf '{"username":"%s","password":"%s"}' "$DOCKERHUB_USER" "$DOCKERHUB_TOKEN") \
+  https://hub.docker.com/v2/users/login)
+[ "$DH_CODE" = 200 ] || die "Docker Hub のトークンが無効です（HTTP ${DH_CODE}、トークン長: ${#DOCKERHUB_TOKEN} 文字）"
+echo "GitHub / Docker Hub のトークンを確認しました"
 
 # ------------------------------------------------------------------ 1. Operator
 log "1. OpenShift Pipelines / OpenShift GitOps の Operator をインストール"
@@ -132,7 +148,9 @@ oc adm policy add-role-to-user edit -z pipeline -n tekton-demo
 log "5. パイプライン (Tekton) をデプロイ"
 # demo-dev への RoleBinding を含むため、demo-dev ができてから適用する
 oc apply -f "$RAW/app-of-apps/pipeline-app.yaml"
-wait_for "ArgoCD Application pipeline-app" 600 "$(app_healthy pipeline-app)"
+# tekton-workspace-pvc は最初にパイプラインが使うまで割り当てられない (WaitForFirstConsumer) ため、
+# pipeline-app は Healthy にならず Progressing のままになる。ここでは同期の完了だけを待つ
+wait_for "ArgoCD Application pipeline-app" 600 "$(app_synced pipeline-app)"
 wait_for "EventListener" 300 "oc get deployment el-sampleapl-listener el-patch-demo-listener -n tekton-demo -o jsonpath='{.items[*].status.availableReplicas}' | grep -Eq '^[1-9]+ [1-9]+$'"
 
 # ------------------------------------------------------------------ 6. パッチ管理コンソール

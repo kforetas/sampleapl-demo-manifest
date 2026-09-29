@@ -181,6 +181,8 @@ setuptools 53.0.0 の 3 件は、Red Hat がバックポートで修正済みの
 
 | 症状 | 原因と対処 |
 |---|---|
+| パイプラインの git push で `Invalid username or token` | `github-auth` Secret のトークンが誤っている（入力プロンプトへの貼り付けが途中で切れる等）。`bash scripts/setup-demo.sh` を再実行して正しいトークンを入力する（スクリプトは入力直後に GitHub / Docker Hub に問い合わせて有効性を確認する） |
+| ArgoCD の `pipeline-app` が Progressing のまま | `tekton-workspace-pvc` は最初にパイプラインが使うまで割り当てられない（WaitForFirstConsumer）ため正常。innerloop などを一度実行すると Healthy になる |
 | buildah で `unexpected EOF`（ベースイメージのダウンロード中） | レジストリとの一時的な通信断。コンソールからもう一度実行するか、OpenShift コンソールで PipelineRun を Rerun する |
 | `wait-rollout` がタイムアウト | ArgoCD が同期していない。ArgoCD で `deploy-sampleapl-demo-dev` を Refresh / Sync する |
 | `scan-after` が失敗 | ゲートが有効で修正可能な脆弱性が残っている。ログで対象を確認し、ゲートなしで実行する |
